@@ -104,21 +104,61 @@ def validate_sales_invoice_taxes(doc, event=None):
                     "or include taxes in the invoice."
                 )
             )
-    if doc.is_return == 1 and doc.doctype in ["Sales Invoice", "POS Invoice"]:
-        if not doc.return_against:
+    # Check if legacy return is set
+    if doc.doctype in ["Sales Invoice", "POS Invoice"] and hasattr(doc, 'custom_is_legacy_return'):
+        if doc.custom_is_legacy_return and doc.is_return != 1:
             frappe.throw(
                 _(
-                    "As per ZATCA regulation, the Billing Reference ID "
-                    "(Original Invoice Number) is mandatory for "
-                    "Credit Notes and Return Invoices. "
-                    "Please select the original invoice in the 'Return Against' field."
+                    "When 'Return Against Legacy Invoice' is checked, "
+                    "'Is Return' must also be checked."
                 )
             )
+    
+    if doc.is_return == 1 and doc.doctype in ["Sales Invoice", "POS Invoice"]:
+        # Check if this is a legacy return
+        is_legacy_return = hasattr(doc, 'custom_is_legacy_return') and doc.custom_is_legacy_return
+        
+        if is_legacy_return:
+            # For legacy returns, require legacy invoice reference
+            if not doc.custom_legacy_invoice_reference:
+                frappe.throw(
+                    _(
+                        "As per ZATCA regulation, the Legacy Invoice Number "
+                        "is mandatory when 'Return Against Legacy Invoice' is checked. "
+                        "Please enter the original invoice number from the old system."
+                    )
+                )
+        else:
+            # Standard return - require return_against from ERPNext system
+            if not doc.return_against:
+                frappe.throw(
+                    _(
+                        "As per ZATCA regulation, the Billing Reference ID "
+                        "(Original Invoice Number) is mandatory for "
+                        "Credit Notes and Return Invoices. "
+                        "Please select the original invoice in the 'Return Against' field."
+                    )
+                )
     if doc.doctype == "Sales Invoice":
-        if doc.is_debit_note == 1 and not doc.return_against:
-            frappe.throw(
-                _("Debit Note must reference a Sales Invoice in 'Return Against'.")
-            )
+        if doc.is_debit_note == 1:
+            # Check if legacy return - if so, ensure is_return is also set
+            if hasattr(doc, 'custom_is_legacy_return') and doc.custom_is_legacy_return:
+                if doc.is_return != 1:
+                    frappe.throw(
+                        _(
+                            "When 'Return Against Legacy Invoice' is checked for Debit Notes, "
+                            "'Is Return' must also be checked."
+                        )
+                    )
+                if not doc.custom_legacy_invoice_reference:
+                    frappe.throw(
+                        _("Legacy Invoice Number is required for Debit Notes against legacy invoices.")
+                    )
+            else:
+                if not doc.return_against:
+                    frappe.throw(
+                        _("Debit Note must reference a Sales Invoice in 'Return Against'.")
+                    )
     if doc.doctype == "Sales Invoice":
         if "claudion4saudi" in frappe.get_installed_apps():
             if hasattr(doc, "custom_advances_copy") and doc.custom_advances_copy:

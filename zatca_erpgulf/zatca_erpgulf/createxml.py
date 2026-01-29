@@ -45,6 +45,7 @@ def get_issue_time(invoice_number):
 def billing_reference_for_credit_and_debit_note(invoice, sales_invoice_doc):
     """
     Adds billing reference details for credit and debit notes to the invoice XML.
+    Supports legacy invoice references for returns against old system invoices.
     """
     try:
         # details of original invoice
@@ -53,9 +54,16 @@ def billing_reference_for_credit_and_debit_note(invoice, sales_invoice_doc):
             cac_billingreference, "cac:InvoiceDocumentReference"
         )
         cbc_id13 = ET.SubElement(cac_invoicedocumentreference, CBC_ID)
-        cbc_id13.text = (
-            sales_invoice_doc.return_against
-        )  # field from return against invoice.
+        
+        # Check if this is a legacy return
+        if (hasattr(sales_invoice_doc, 'custom_is_legacy_return') and 
+            sales_invoice_doc.custom_is_legacy_return and 
+            sales_invoice_doc.custom_legacy_invoice_reference):
+            # Use manual text input for old system invoices
+            cbc_id13.text = sales_invoice_doc.custom_legacy_invoice_reference
+        else:
+            # Use standard ERPNext link
+            cbc_id13.text = sales_invoice_doc.return_against
 
         return invoice
     except (ValueError, KeyError, AttributeError) as error:
